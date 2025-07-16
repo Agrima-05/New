@@ -79,26 +79,49 @@ def replace_not_in_select_in_file(input_string):
     ##print(a)
     return re.sub(pattern, 'NOT IN (SELECT DISTINCT ', input_string, flags=re.IGNORECASE|re.DOTALL)
 
-def add_prd_id(sql_statement):
+
+def add_prd_id(sql_statement:str):
     pattern= re.compile(
-    #  r'(?<!EXTRACT\(DAY)\s+FROM'     # Negative lookbehind to avoid EXTRACT(DAY FROM
-    r'\b(from|JOIN|TABLE|INTO|UPDATE|MERGE INTO|DELETE FROM|VIEW)\b\s+([\w\$\`\'\"\{\}]+)\.+([\w\$\`\'\"\{\}]+)' # SQL keywords
-     
-    ,         # Match schema.table
-    flags=re.DOTALL|re.IGNORECASE)
+    r'\b(from|JOIN|TABLE|INTO|UPDATE|MERGE INTO|DELETE FROM|VIEW|USING)\b\s+(?P<proj_id>([\w\$\`\{\}\-]+)\.)?(?P<schema>[\w\$\`\{\}\-]+)\.+(?P<table>[\w\$\`\{\}\-]+)', 
+    flags=re.IGNORECASE)
+    replace_proj = {"vz-it-np-gk1v-dev-edwdo-0.":"${VZ_BQ_PROJECT}",
+                   "vz-it-np-gk1v-dev-edwpr-0.":"${VZ_PR_BQ_PROJECT}", 
+                   "vz-it-np-zdwv-dev-edwdo-0.":"${ZDWV_BQ_PROJECT}"}
 
     def add_id(match):
         # print(match)
         # #print(match.group(1),match.group(2),"-=-=-=--=-=-=-=-")
         state = match.group(1)
-        schema = match.group(2)
-        table = match.group(3)
-        if re.search(fr"(day|month|year)\s+from\s+({schema})\.+({table})", sql_statement,  flags=re.DOTALL|re.IGNORECASE):
+        project_id = match.group("proj_id")
+        schema = match.group("schema")
+        table = match.group("table")
+
+        if re.search(fr"(day|month|year|week|dayofyear|dayofweek|quarter|hour|minute|second|microsecond|millisecond|date|time)\s+from\s+({schema})\.+({table})", sql_statement,  flags=re.IGNORECASE):
             # #print(schema,"*"*10,re.search(fr"(day|month|year)\s+from\s+({schema})\.+({table})", sql_statement,  flags=re.DOTALL|re.IGNORECASE))
             return f"{state} {schema}.{table}"
-        return f"{state} {QUAL_BQ_PROJECT_ID}.{schema}.{table}"
 
-    return pattern.sub( add_id, sql_statement)
+        
+
+
+        if "$" not in schema:
+            schema = schema.lower()
+        if "$" not in table:
+            table = table.lower()
+        
+        if project_id and "$" not in project_id:
+            project_id_param = replace_proj.get(project_id, "${VZ_BQ_PROJECT}")
+            return f"{state} {project_id_param}.{schema}.{table}"
+        
+        project_id_param = "${VZ_BQ_PROJECT}"
+        if schema.lower().startswith("edw_"):
+            project_id_param = "${ZDWV_BQ_PROJECT}"
+        elif "_raw_tbls" in schema.lower():
+            project_id_param = "${VZ_PR_BQ_PROJECT}"
+        
+        return f"{state} {project_id_param}.{schema}.{table}"
+
+    return pattern.sub(add_id, sql_statement)
+
 
 def remove_comments(content):
     content = re.sub(r'--.*', '', content)  # Remove single-line comments (--)
@@ -218,7 +241,7 @@ def add_begin_end_transection_in_code(input_path):
     end_part = """
 COMMIT TRANSACTION;
 EXCEPTION WHEN ERROR THEN
-RAISE USING MESSAGE = CONCAT("Exception while running query : ",FORMAT(@@error.message),@@error.formatted_stack_trace);
+RAISE USING MESSAGE = CONCAT("RC (return code) = ", FORMAT(\'%11d\', _GLOBAL_ERROR_CODE), "Exception while running query : ",FORMAT(@@error.message),@@error.formatted_stack_trace);
 ROLLBACK TRANSACTION;
 END;"""
     out = f"{input_path}"
@@ -244,7 +267,8 @@ END;"""
         content = re.sub(r"END;\s*$", "", content, flags = re.I|re.DOTALL)
         #print(content[-10:],"========end")
         content = re.sub(r"BEGIN\s+BEGIN\s+TRANSACTION;", "", content, flags = re.I|re.DOTALL)
-        content = re.sub(r"(END;\s+)?COMMIT TRANSACTION;\s+EXCEPTION WHEN ERROR THEN\s+RAISE USING MESSAGE = CONCAT\(\"Exception while running query : \",FORMAT\(@@error.message\),@@error.formatted_stack_trace\);\s+ROLLBACK TRANSACTION;\s+END;", "", content, flags = re.I|re.DOTALL)
+        # content = re.sub(r"(END;\s+)?COMMIT TRANSACTION;\s+EXCEPTION WHEN ERROR THEN\s+RAISE USING MESSAGE = CONCAT\(\"Exception while running query : \",FORMAT\(@@error.message\),@@error.formatted_stack_trace\);\s+ROLLBACK TRANSACTION;\s+END;", "", content, flags = re.I|re.DOTALL)
+        content = re.sub(r"(END;\s+)?COMMIT TRANSACTION;\s+EXCEPTION WHEN ERROR THEN\s+RAISE USING MESSAGE = CONCAT\(\"RC \(return code\)=\",\s*FORMAT\('%11d',\s*_GLOBAL_ERROR_CODE\),\s*\" Exception while running query : \",\s*@@error.message,\s*@@error.formatted_stack_trace\);\s+ROLLBACK TRANSACTION;\s+END;", "", content, flags=re.I | re.DOTALL)
         temp = re.search(r"\bBEGIN\b\s+declare(.*?)--PSOCOMMENT--", content, flags = re.I|re.DOTALL)
         temp = f"Declare {temp.group(1)}" if temp else ""
         content = re.sub(r"\bBEGIN\b\s+declare.*?--PSOCOMMENT--", "--PSOCOMMENT--", content, flags = re.I|re.DOTALL)
