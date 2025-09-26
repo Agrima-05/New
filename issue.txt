@@ -1,0 +1,568 @@
+select  
+'Order to Activation' src_type,
+src_tbl_desc,
+coalesce(pit_store_num, dea_store_num, eo_store_num) as store_num,
+coalesce(pit_invc_num, dea_invc_num, eo_invc_num) as invc_num,
+pit_invc_line_num as invc_line_num,
+coalesce(cast(pit_src_create_ts as DATE), dea_order_open_dt, eo_order_create_dt) as order_dt,
+coalesce(ads.vz2_segmt_cd, pit_vz2_segmt_cd, dea_vz2_segmt_cd, eo_vz2_segmt_cd, esf_vz2_segmt_cd, dsf_vz2_segmt_cd) as vz2_segmt_cd,  
+coalesce(ads.vz2_segmt_desc, pit_vz2_segmt_desc, dea_vz2_segmt_desc, eo_vz2_segmt_desc, esf_vz2_segmt_desc, dsf_vz2_segmt_desc) as vz2_segmt_desc,  
+coalesce(ads.vz2_segmt_ctgry_desc, pit_vz2_segmt_ctgry_desc, dea_vz2_segmt_ctgry_desc, eo_vz2_segmt_ctgry_desc, esf_vz2_segmt_ctgry_desc, dsf_vz2_segmt_ctgry_desc) as vz2_segmt_ctgry_desc,
+coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) as sls_dist_chnl_type_cd,
+coalesce(pit_sls_dist_chnl_churn_ctgry, dea_sls_dist_chnl_churn_ctgry, eo_sls_dist_chnl_churn_ctgry) as sls_dist_chnl_churn_ctgry,
+o.sls_outlet_nm,
+coalesce(pit_sls_outlet_id, dea_sls_outlet_id, eo_sls_outlet_id) as sls_outlet_id,
+upper(ma.master_agent_desc) as master_agent_desc,
+coalesce(pit_vcg_mkt_desc, dea_vcg_mkt_desc, eo_vcg_mkt_desc) as vcg_mkt_desc,
+coh.territory_desc,
+coh.territory_cd,
+coh.district_desc,
+coh.district_cd,
+coh.district_nm_1,
+coh.district_nm_2,
+coalesce(pit_data_tier_fin, dea_data_tier_fin, eo_data_tier_fin) as data_tier_fin,
+coalesce(pit_device_grouping, dea_device_grouping, eo_device_grouping) as device_grouping, 
+coalesce(pit_device_brand_nm, dea_device_brand_nm, eo_device_brand_nm) as device_brand_nm, 
+coalesce(pit_eqp_prod_nm, dea_device_prod_nm, eo_prod_nm) as prod_nm,
+coalesce(pit_mfr_item_cd, eo_device_item_cd, eph_item_cd, sc_item_cd, esf_item_cd) as item_cd,
+coalesce(pit_esn_cap_cd, dea_eqp_device_id, eo_eqp_device_id) as eqp_device_id,
+coalesce(pit_src_create_user_nm, esf_user_id, dsf_user_id) as user_id,
+coalesce(po_cust_id, dea_cust_id, eo_cust_id, esf_cust_id, dsf_cust_id) as cust_id,
+coalesce(po_acct_num, dea_acct_num, eo_acct_num, esf_acct_num, dsf_acct_num) as acct_num,
+cal.cust_line_seq_id,
+coalesce(pit_mtn, dea_mtn, eo_mtn, esf_mtn) as mtn,
+case when cal2.cust_id is not null then 'Y' else 'N' end as device_on_account,
+case when cal3.cust_id is not null then 'Y' else 'N' end as device_on_differ_account,
+case when pit_mfr_item_cd like '%CLNR%' then 'CLNR' 
+else 'Other' end as CLNR,
+case when pit_dip_ind = 'T' then 'Trade' else 'Other' end as Trade,
+case when pit_refund_applied_ind = 'R' then 'Return' end as "Return",
+case when Coalesce(pit_loc_src_ind,'L') IN ('F','O') then 'BAU Shipped'
+when pit_loc_src_ind = 'L' then 'Locally Fulfilled' 
+end as PIT_Category,
+case when po_invc_status_cd = 'CR' and po_invc_cmpltn_ts = '1858-11-17 00:00:00' then 'Pending'  
+when po_invc_status_cd = 'CR' then 'Pending Final State'  
+when po_invc_status_cd = 'MO' and po_invc_cmpltn_ts = '1858-11-17 00:00:00' then 'Pending'  
+when po_invc_status_cd = 'MO' then 'Pending Final State'  
+when po_invc_status_cd = 'TC' and po_invc_cmpltn_ts = '1858-11-17 00:00:00' then 'Pending'  
+when po_invc_status_cd = 'TC' then 'Pending Final State'  
+when po_invc_status_cd = 'OM' and po_invc_cmpltn_ts = '1858-11-17 00:00:00' then 'Pending'  
+when po_invc_status_cd = 'OM' then 'Pending Final State'  
+when po_invc_status_cd = 'HD' and po_invc_cmpltn_ts = '1858-11-17 00:00:00' then 'Pending'  
+when po_invc_status_cd = 'HD' then 'Pending Final State'  
+when po_invc_status_cd = 'HO' and po_invc_cmpltn_ts = '1858-11-17 00:00:00' then 'Pending'  
+when po_invc_status_cd = 'HO' then 'Pending Final State'  
+when po_invc_status_cd = 'TR' and po_invc_cmpltn_ts = '1858-11-17 00:00:00' then 'Pending'  
+when po_invc_status_cd = 'TR' then 'Pending Final State'  
+when po_invc_status_cd = 'CO' and po_invc_multiline_ind = 'Y' and po_invc_cmpltn_ts = '1858-11-17 00:00:00' then 'Pending'
+when po_invc_status_cd = 'RJ' then 'Canceled' 
+when po_invc_status_cd = 'XX' then 'Canceled' 
+when po_invc_status_cd = 'CO' and (po_invc_multiline_ind is null or po_invc_multiline_ind = 'N') and po_invc_cmpltn_ts = '1858-11-17 00:00:00' then 'Void'
+when po_invc_status_cd = 'CO' and cast(po_invc_cmpltn_ts as DATE) >= 1240101 then 'Completed'  
+when pit_void_ind = 'V' then 'Void' 
+else 'NA'
+end as po_invc_status_desc,
+CASE WHEN po_cust_type_cd = 'e' THEN 'Existing'
+WHEN po_cust_type_cd = 'n' THEN 'New'
+WHEN po_cust_type_cd = 'u' THEN 'Upgrade'
+END AS cust_type_desc, 
+case when cal.esn_change_reas_cd = 'CE' and cal.esn_change_dt = order_dt then 'ESN Change' end as esn_chg_ind,  
+case when wdd_tracking_no = 'ISPU' then 'Locally Fulfilled' 
+when wdd_tracking_no like '%SNW%' then 'Locally Fulfilled'  
+when wdd_tracking_no is not null then 'Shipped' end as wsap_ship_ind,
+case when "Return" = 'Return' and cust_type_desc = 'Upgrade' then 'Return Upgrade'
+when "Return" = 'Return' and cust_type_desc in ('New', 'Existing') then 'Return Acquisition'
+when esf_net_sales < 0 and esf_acq_ret_ind = 'A' then 'Return Acquisition'
+when esf_net_sales < 0 and esf_acq_ret_ind = 'R' then 'Return Upgrade'
+when dsf_activity_dt is not null and dsf_gross_adds <> 0 and BYOD_IND = 'Y' and dsf_rev_gen_ind = 'Y' and dsf_managed_ind = 'C' and dsf_line_type_cd <> 't' then 'BYOD Gross Adds'
+when esf_conv_ind = 'ISP' and dsf_activity_dt is not null then 'ISPU Gross Adds' 
+when esf_conv_ind = 'SDD' and dsf_activity_dt is not null then 'SDD Gross Adds'  
+when (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and dsf_activity_dt is not null and dsf_sls_dist_chnl_type_cd in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Backorder Shipped Gross Adds' 
+when (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and dsf_activity_dt is not null and dea_trans_type_cd = 'AC' and dea_sls_dist_chnl_type_cd in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Backorder Shipped Gross Adds' 
+when (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and dsf_activity_dt is not null then 'Direct Backorder Shipped Gross Adds'  
+when dsf_activity_dt is not null and esf_row_type_id = 'D' and Coalesce(esf_fulfillment_ind,'L') IN ('F','O') then 'Direct BAU Shipped Gross Adds'
+when dsf_activity_dt is not null and dsf_sls_dist_chnl_type_cd in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') and pit_category = 'BAU Shipped' and cast(wdd_depart_wh_ts as DATE) >= order_dt then 'Indirect BAU Shipped Gross Adds' 
+when dsf_activity_dt is not null and dsf_sls_dist_chnl_type_cd in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Locally Fulfilled Gross Adds' 
+when dea_trans_type_cd = 'AC' and dea_sls_dist_chnl_type_cd in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') and dsf_activity_dt is not null then 'Indirect Locally Fulfilled Gross Adds' 
+when dsf_activity_dt is not null and esf_row_type_id = 'D' and esf_fulfillment_ind = 'L' then 'Direct Locally Fulfilled Gross Adds'
+when dsf_activity_dt is not null and dsf_sls_dist_chnl_churn_ctgry in ('Internet', 'NonComm', 'TMK', 'Outside') then 'Direct BAU Shipped Gross Adds'
+when dsf_activity_dt is not null and dsf_sls_dist_chnl_churn_ctgry in ('Stores') then 'Direct Locally Fulfilled Gross Adds'
+when dsf_activity_dt is not null and dsf_sls_dist_chnl_churn_ctgry in ('Loc Retail', 'Loc Agent', 'Indirect Internet', 'Nat Retail', 'Door to Door', 'Retail - Mid Major Agents', 'Natl Retailer Direct') then 'Indirect Locally Fulfilled Gross Adds'
+
+when (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and esf_pymnt_dt is not null and esf_fin_tot_flag = 'Y' and esf_row_type_id = 'D' and esf_acq_ret_ind = 'A' and dsf_activity_dt is null then 'Direct Backorder Shipped Acquisition Sale'  
+when (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and esf_pymnt_dt is not null and dsf_activity_dt is null and po_cust_type_cd in ('e', 'n') and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') 
+and (cast(wdd_depart_wh_ts as DATE) >= order_dt or eph_order_status = 'SHIPPED' or sc_ship_dt >= order_dt) then 'Indirect Backorder Shipped Acquisition Sale'  
+when (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and esf_pymnt_dt is null and dsf_activity_dt is null and po_cust_type_cd in ('e', 'n') and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') 
+and (cast(wdd_depart_wh_ts as DATE) >= order_dt or eph_order_status = 'SHIPPED' or sc_ship_dt >= order_dt) then 'Indirect Backorder Shipped Acquisition Sale (ship-to-agent)'  
+when (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and esf_pymnt_dt is null and dsf_activity_dt is null and po_cust_type_cd in ('e', 'n') and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) not in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') 
+and (cast(wdd_depart_wh_ts as DATE) >= order_dt or eph_order_status = 'SHIPPED' or sc_ship_dt >= order_dt) then 'Direct Backorder Shipped Acquisition Sale (not in ESF)'  
+when (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and esf_pymnt_dt is null and dsf_activity_dt is null and po_cust_type_cd in ('u') and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) not in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') 
+and (cast(wdd_depart_wh_ts as DATE) >= order_dt or eph_order_status = 'SHIPPED' or sc_ship_dt >= order_dt) then 'Direct Backorder Shipped Upgrade (not in ESF)'  
+when (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and esf_pymnt_dt is not null and dsf_activity_dt is null and po_cust_type_cd in ('u') and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') 
+and (cast(wdd_depart_wh_ts as DATE) >= order_dt or eph_order_status = 'SHIPPED' or sc_ship_dt >= order_dt) then 'Indirect Backorder Shipped Upgrade'  
+when (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and esf_pymnt_dt is null and dsf_activity_dt is null and po_cust_type_cd in ('u') and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') 
+and (cast(wdd_depart_wh_ts as DATE) >= order_dt or eph_order_status = 'SHIPPED' or sc_ship_dt >= order_dt) then 'Indirect Backorder Shipped Upgrade (ship-to-agent)'  
+when dsf_activity_dt is null and esf_pymnt_dt is not null and po_cust_type_cd in ('e', 'n') and pit_sls_dist_chnl_type_cd in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6')
+and pit_category = 'BAU Shipped' and cast(wdd_depart_wh_ts as DATE) >= order_dt then 'Indirect BAU Shipped Acquisition Sale' 
+when dsf_activity_dt is null and po_cust_type_cd in ('e', 'n') and pit_sls_dist_chnl_type_cd in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6')
+and pit_category = 'BAU Shipped' and cast(wdd_depart_wh_ts as DATE) >= order_dt then 'Indirect BAU Shipped Acquisition Sale (ship-to-agent)' 
+when esf_pymnt_dt is not null and dsf_activity_dt is null and esf_acq_ret_ind = 'A' and esf_fin_tot_flag = 'Y' and esf_fin_tot_flag = 'Y' and esf_row_type_id = 'D' and Coalesce(esf_fulfillment_ind,'L') IN ('F','O') and esf_net_sales > 0 then 'Direct BAU Shipped Acquisition Sale'
+when dsf_activity_dt is null and po_cust_type_cd in ('e', 'n') and pit_sls_dist_chnl_type_cd not in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6')
+and pit_category = 'BAU Shipped' and cast(wdd_depart_wh_ts as DATE) >= order_dt then 'Direct BAU Shipped Acquisition Sale (not in ESF)'
+when esf_conv_ind = 'ISP' and esf_acq_ret_ind = 'A' and esf_fin_tot_flag = 'Y' and esf_row_type_id <> 'pr' and dsf_activity_dt is null and esf_net_sales > 0 then 'ISPU Acquisition Sale' 
+when esf_conv_ind = 'SDD' and esf_acq_ret_ind = 'A' and esf_fin_tot_flag = 'Y' and esf_row_type_id <> 'pr' and dsf_activity_dt is null and esf_net_sales > 0 then 'SDD Acquisition Sale' 
+when esf_pymnt_dt is not null and dsf_activity_dt is null and esf_acq_ret_ind = 'A' and po_cust_type_cd = 'u' and esf_fin_tot_flag = 'Y' and esf_row_type_id = 'D' and esf_fulfillment_ind = 'L' and esf_net_sales > 0 and esf_return_qty = 0 and esf_order_type = 'RF' then 'Direct Locally Fulfilled Upgrade with a Return' 
+when esf_pymnt_dt is not null and dsf_activity_dt is null and esf_acq_ret_ind = 'A' and esf_fin_tot_flag = 'Y' and esf_row_type_id = 'D' and esf_fulfillment_ind = 'L' and esf_net_sales > 0 then 'Direct Locally Fulfilled Acquisition Sale' 
+when po_cust_type_cd in ('e', 'n') and pit_sls_dist_chnl_type_cd in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') 
+and pit_category = 'Locally Fulfilled' then 'Indirect Locally Fulfilled Gross Adds'
+when dea_trans_type_cd = 'AC' and dea_sls_dist_chnl_type_cd in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Locally Fulfilled Gross Adds' 
+when esf_conv_ind = 'ISP' and ispu_pickup_dt >= order_dt and esf_acq_ret_ind = 'R' and esf_fin_upg_flag = 'Y' and esf_row_type_id <> 'pr' and dsf_activity_dt is null then 'ISPU Upgrade' 
+when esf_conv_ind = 'SDD' and esf_acq_ret_ind = 'R' and esf_fin_tot_flag = 'Y' and esf_row_type_id <> 'pr' and dsf_activity_dt is null then 'SDD Upgrade' 
+when (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and esf_pymnt_dt is not null and esf_acq_ret_ind = 'R' and esf_row_type_id = 'D' and esf_fin_upg_flag = 'Y' and dsf_activity_dt is null then 'Direct Backorder Shipped Upgrade'
+when (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and esf_pymnt_dt is not null and esf_row_type_id = 'IUG' and esf_fin_upg_flag = 'Y' then 'Indirect Backorder Shipped Upgrade' 
+when esf_pymnt_dt is not null and dsf_activity_dt is null and po_cust_type_cd in ('u') and pit_sls_dist_chnl_type_cd in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6')
+and pit_category = 'BAU Shipped' and cast(wdd_depart_wh_ts as DATE) >= order_dt then 'Indirect BAU Shipped Upgrade' 
+when esf_pymnt_dt is null and dsf_activity_dt is null and po_cust_type_cd in ('u') and pit_sls_dist_chnl_type_cd in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6')
+and pit_category = 'BAU Shipped' and cast(wdd_depart_wh_ts as DATE) >= order_dt then 'Indirect BAU Shipped Upgrade (ship-to-agent)' 
+when esf_pymnt_dt is not null and esf_acq_ret_ind = 'R' and esf_fin_upg_flag = 'Y' and dsf_activity_dt is null and esf_row_type_id = 'D' and Coalesce(esf_fulfillment_ind,'L') IN ('F','O') then 'Direct BAU Shipped Upgrade'
+when esf_pymnt_dt is null and dsf_activity_dt is null and po_cust_type_cd in ('u') and pit_sls_dist_chnl_type_cd not in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6')
+and pit_category = 'BAU Shipped' and cast(wdd_depart_wh_ts as DATE) >= order_dt then 'Direct BAU Shipped Upgrade (not in ESF)' 
+when esf_pymnt_dt is not null and esf_fin_upg_flag = 'Y' and dsf_activity_dt is null and esf_row_type_id = 'IUG' and Coalesce(esf_fulfillment_ind,'L') IN ('F','O') then 'Indirect BAU Shipped Upgrade'
+when esf_pymnt_dt is not null and esf_fin_upg_flag = 'Y' and dsf_activity_dt is null and esf_row_type_id = 'IUG' and pit_category = 'BAU Shipped' then 'Indirect BAU Shipped Upgrade'
+when dea_trans_type_cd = 'UP' and dea_sls_dist_chnl_type_cd in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') and dsf_activity_dt is null then 'Indirect Locally Fulfilled Upgrade'
+when esf_pymnt_dt is not null and esf_fin_upg_flag = 'Y' and dsf_activity_dt is null and esf_row_type_id = 'IUG' and pit_category = 'Locally Fulfilled' then 'Indirect Locally Fulfilled Upgrade' 
+when esf_pymnt_dt is not null and esf_fin_upg_flag = 'Y' and dsf_activity_dt is null and esf_row_type_id = 'IUG' and pit_category is null then 'Indirect Locally Fulfilled Upgrade' 
+when esf_pymnt_dt is not null and esf_acq_ret_ind = 'R' and esf_fin_upg_flag = 'Y' and dsf_activity_dt is null and esf_row_type_id = 'D' and esf_fulfillment_ind ='L' then 'Direct Locally Fulfilled Upgrade'
+when esf_pymnt_dt is not null and esf_acq_ret_ind in ('A', 'R') and (esf_fin_upg_flag <> 'Y' or esf_fin_tot_flag <> 'Y') and dsf_activity_dt is null then 'Unqualified Sale'
+
+when cal.esn_change_reas_cd = 'CE' and cal.esn_change_dt = order_dt then 'ESN Change Order'
+
+when esf_pymnt_dt is null and dsf_activity_dt is null and po_cust_type_cd in ('u') and fraud_ind = 'Y' then 'Canceled Upgrade Order - Fraud'  
+when esf_pymnt_dt is null and dsf_activity_dt is null and po_cust_type_cd in ('e', 'n') and fraud_ind = 'Y' then 'Canceled Acquisition Order - Fraud'  
+
+when esf_pymnt_dt is null and dsf_activity_dt is null and po_invc_status_cd in ('RJ', 'XX') and po_cust_type_cd in ('u') and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Canceled Upgrade Order'  
+when esf_pymnt_dt is null and dsf_activity_dt is null and po_invc_status_cd in ('RJ', 'XX') and po_cust_type_cd in ('u') then 'Direct Canceled Upgrade Order'  
+when esf_pymnt_dt is null and dsf_activity_dt is null and po_invc_status_cd in ('RJ', 'XX') and po_cust_type_cd in ('e', 'n') and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Canceled Acquisition Order'  
+when esf_pymnt_dt is null and dsf_activity_dt is null and po_invc_status_cd in ('RJ', 'XX') and po_cust_type_cd in ('e', 'n') then 'Direct Canceled Acquisition Order'  
+
+when po_cust_type_cd = 'u' and esf_pymnt_dt is null and dsf_activity_dt is null and (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and (po_invc_status_desc = 'Pending Final State' or (eph_order_status like '%CANCELLED%' or eph_order_status like '%IFDC%' or eph_order_status like '%ERROR%')) and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Canceled Upgrade Preorder/Backorder' 
+when po_cust_type_cd = 'u' and esf_pymnt_dt is null and dsf_activity_dt is null and (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and (po_invc_status_desc = 'Pending Final State' or (eph_order_status like '%CANCELLED%' or eph_order_status like '%IFDC%' or eph_order_status like '%ERROR%')) then 'Direct Canceled Upgrade Preorder/Backorder' 
+when po_cust_type_cd in ('e', 'n') and esf_pymnt_dt is null and dsf_activity_dt is null and (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and (po_invc_status_desc = 'Pending Final State' or (eph_order_status like '%CANCELLED%' or eph_order_status like '%IFDC%' or eph_order_status like '%ERROR%')) and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Canceled Acquisition Preorder/Backorder'
+when po_cust_type_cd in ('e', 'n') and esf_pymnt_dt is null and dsf_activity_dt is null and (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and (po_invc_status_desc = 'Pending Final State' or (eph_order_status like '%CANCELLED%' or eph_order_status like '%IFDC%' or eph_order_status like '%ERROR%')) then 'Direct Canceled Acquisition Preorder/Backorder'
+
+when esf_pymnt_dt is null and dsf_activity_dt is null and po_invc_status_cd in ('OM', 'HD', 'TR', 'HO') and po_cust_type_cd in ('u') and po_invc_status_desc = 'Pending Final State' and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Canceled Upgrade Order'  
+when esf_pymnt_dt is null and dsf_activity_dt is null and po_invc_status_cd in ('OM', 'HD', 'TR', 'HO') and po_cust_type_cd in ('u') and po_invc_status_desc = 'Pending Final State' then 'Direct Canceled Upgrade Order'  
+when esf_pymnt_dt is null and dsf_activity_dt is null and po_invc_status_cd in ('OM', 'HD', 'TR', 'HO') and po_cust_type_cd in ('e', 'n') and po_invc_status_desc = 'Pending Final State' and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Canceled Acquisition Order' 
+when esf_pymnt_dt is null and dsf_activity_dt is null and po_invc_status_cd in ('OM', 'HD', 'TR', 'HO') and po_cust_type_cd in ('e', 'n') and po_invc_status_desc = 'Pending Final State' then 'Direct Canceled Acquisition Order' 
+when po_cust_type_cd = 'u' and esf_pymnt_dt is null and dsf_activity_dt is null and po_invc_status_desc = 'Pending Final State' and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Canceled Upgrade Order'
+when po_cust_type_cd = 'u' and esf_pymnt_dt is null and dsf_activity_dt is null and po_invc_status_desc = 'Pending Final State' then 'Direct Canceled Upgrade Order'
+
+when po_cust_type_cd in ('e', 'n') and esf_pymnt_dt is null and dsf_activity_dt is null and po_invc_status_desc = 'Pending Final State' and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Canceled Acquisition Order'
+when po_cust_type_cd in ('e', 'n') and esf_pymnt_dt is null and dsf_activity_dt is null and po_invc_status_desc = 'Pending Final State' then 'Direct Canceled Acquisition Order'
+
+when po_cust_type_cd = 'u' and esf_pymnt_dt is null and dsf_activity_dt is null and (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Pending Upgrade Preorder/Backorder' 
+when po_cust_type_cd = 'u' and esf_pymnt_dt is null and dsf_activity_dt is null and (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0)  then 'Direct Pending Upgrade Preorder/Backorder' 
+
+when po_cust_type_cd in ('e', 'n') and esf_pymnt_dt is null and dsf_activity_dt is null and (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Pending Acquisition Preorder/Backorder'
+when po_cust_type_cd in ('e', 'n') and esf_pymnt_dt is null and dsf_activity_dt is null and (eph_preorder_create_dt is not null or sc_order_dt is not null or po_preorder_confirm_id <> 0) then 'Direct Pending Acquisition Preorder/Backorder'
+when esf_pymnt_dt is null and dsf_activity_dt is null and wdd_ord_dt is null and po_invc_status_cd in ('OM', 'HD', 'TR', 'HO') and po_cust_type_cd in ('e', 'n') and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Pending Acquisition Order' 
+when esf_pymnt_dt is null and dsf_activity_dt is null and wdd_ord_dt is null and po_invc_status_cd in ('OM', 'HD', 'TR', 'HO') and po_cust_type_cd in ('e', 'n') then 'Direct Pending Acquisition Order' 
+
+when po_cust_type_cd = 'u' and wdd_ord_dt is null and esf_pymnt_dt is null and dsf_activity_dt is null and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Pending Upgrade Order'
+when po_cust_type_cd = 'u' and wdd_ord_dt is null and esf_pymnt_dt is null and dsf_activity_dt is null then 'Direct Pending Upgrade Order'
+
+when po_cust_type_cd in ('e', 'n') and  wdd_ord_dt is null and esf_pymnt_dt is null and dsf_activity_dt is null and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Pending Acquisition Order'
+when po_cust_type_cd in ('e', 'n') and  wdd_ord_dt is null and esf_pymnt_dt is null and dsf_activity_dt is null then 'Direct Pending Acquisition Order'
+
+when esf_pymnt_dt is null and dsf_activity_dt is null and wdd_ord_dt is null and po_invc_status_cd in ('OM', 'HD', 'TR', 'HO') and po_cust_type_cd in ('u') and coalesce(pit_sls_dist_chnl_type_cd, dea_sls_dist_chnl_type_cd, eo_sls_dist_chnl_type_cd) in ('I', 'A', 'IN', 'R', 'DD', 'MM', 'B6') then 'Indirect Pending Upgrade Order'  
+when esf_pymnt_dt is null and dsf_activity_dt is null and wdd_ord_dt is null and po_invc_status_cd in ('OM', 'HD', 'TR', 'HO') and po_cust_type_cd in ('u') then 'Direct Pending Upgrade Order'  
+
+else 'Pending Other Order' end as current_order_status,
+
+case when (device_on_account = 'Y' or device_on_differ_account = 'Y') 
+and esf_net_sales is null and current_order_status not like '%Gross Adds%' then 
+current_order_status || ' - ' || 'Device on New Order' 
+else current_order_status end as current_order_status2,
+
+case when current_order_status2 like '%Device on New Order%' then 'Canceled'
+when current_order_status like '%Pending%' then 'Pending'
+when current_order_status like '%Canceled%' then 'Canceled'
+when current_order_status like '%Backorder Shipped Gross Adds%' then 'Backorder Shipped Gross Adds         '
+when current_order_status like '%BAU Shipped Gross Adds%' then 'BAU Shipped Gross Adds         '
+when current_order_status like '%Locally Fulfilled Gross Adds%' then 'Locally Fulfilled Gross Adds'
+when current_order_status = 'BYOD Gross Adds' then 'BYOD Gross Adds'
+when current_order_status like '%Backorder Shipped%' then 'Backorder Shipped Order'
+when current_order_status like '%BAU Shipped%' then 'BAU Shipped Order'
+when current_order_status like '%Locally Fulfilled%' then 'Locally Fulfilled Order'
+when current_order_status = 'Other Gross Adds' then 'Other Gross Adds'
+when current_order_status like '%Return%' then 'Return Order'
+when current_order_status in ('ISPU Gross Adds', 'SDD Gross Adds') then 'Locally Fulfilled Gross Adds'
+when current_order_status in ('ISPU Upgrade', 'SDD Upgrade') then  'Locally Fulfilled Order'
+when current_order_status in ('ISPU Acquisition Sale', 'SDD Acquisition Sale') then 'Locally Fulfilled Order'
+else 'Other'
+end as current_order_status_grouping,
+
+case when current_order_status_grouping like '%Canceled%' then 'Canceled'
+when current_order_status like '%Pending%' then 'Pending'
+when current_order_status like '%Shipped%' then 'Shipped'
+when current_order_status like '%Locally Fulfilled%' then 'Locally Fulfilled'
+when current_order_status like '%ISPU%' then 'Locally Fulfilled'
+when current_order_status like '%SDD%' then 'Locally Fulfilled'
+when current_order_status like '%Return%' and Coalesce(esf_fulfillment_ind,'L') IN ('F','O') then 'Shipped'
+when current_order_status like '%Return%' and esf_fulfillment_ind = 'L' then 'Locally Fulfilled'
+when current_order_status like '%BYOD%' then 'BYOD'
+else 'Other'
+end as current_iconic_status,
+case when current_order_status like '%Gross Adds%' then 'Gross Adds'
+when current_order_status like '%Upgrade%' then 'Upgrade'
+when current_order_status like '%Acquisition%' then 'Acquisition'
+else 'Other' end as current_order_type,
+esf_vz2_segmt_desc,
+esf_vz2_segmt_ctgry_desc,
+esf_sls_dist_chnl_churn_ctgry,
+esf_sls_outlet_id,
+esf_vcg_mkt_desc,
+esf_data_tier_fin,
+esf_device_grouping,
+esf_device_brand_nm,
+esf_pymnt_dt,
+esf_invc_dt,
+esf_acq_ret_ind,
+esf_pos_prepaid_ind,
+esf_pplan_cd,
+esf_fin_upg_flag,
+esf_sls_prsn_id,
+esf_user_id,
+ispu_pickup_dt,
+ispu_pymnt_dt,
+case when esf_conv_ind = 'ISP' then 'ISPU'
+when esf_conv_ind = 'SDD' then 'SDD' end as ispu_sdd_ind, 
+case when sc_order_dt is not null then 'Preorder/Backorder'
+when eph_preorder_create_dt is not null then 'Preorder/Backorder' 
+when po_preorder_confirm_id <> 0 then 'Preorder/Backorder' 
+else 'Inventory Available' end as preorder_backorder,
+esf_conv_ind,
+dsf_vz2_segmt_desc,
+dsf_vz2_segmt_ctgry_desc,
+dsf_sls_dist_chnl_churn_ctgry,
+dsf_sls_outlet_id,
+dsf_vcg_mkt_desc,
+case when pp.coe_pplan_ctgry_desc = 'Fixed Wireless' then 'FWA'
+when pp.pplan_cd in ('70995', '72974') then 'MN-Smartphone'
+else dsf_data_tier_fin end as dsf_data_tier_fin,
+dsf_device_grouping,
+dsf_device_brand_nm,
+dsf_activity_dt,
+dsf_acct_new_aal_ind,
+dsf_user_id,
+byod_ind,
+ln_fulfill_req_dt,
+ln_vz2_segmt_desc,
+ln_vz2_segmt_ctgry_desc,
+ln_sls_dist_chnl_churn_ctgry,
+ln_vcg_mkt_desc,
+ln_data_tier_fin,
+ln_device_grouping,
+ln_device_brand_nm,
+dea_order_open_dt,
+dea_vz2_segmt_desc,
+dea_sls_dist_chnl_churn_ctgry,
+dea_vcg_mkt_desc,
+dea_data_tier_fin,
+dea_device_grouping,
+dea_device_brand_nm,
+eo_order_create_dt,
+eo_vz2_segmt_desc,
+eo_sls_dist_chnl_churn_ctgry,
+eo_vcg_mkt_desc,
+eo_data_tier_fin,
+eo_device_grouping,
+eo_device_brand_nm,
+digital_channel,
+wdd_ord_dt,
+wdd_ord_status,
+cast(wdd_depart_wh_ts as DATE) as wdd_depart_wh_dt,
+wdd_ship_method,
+case when wdd_tracking_no is not null then 'Y' else 'N' end as wdd_tracking_ind,
+sc_snapshot_dt,
+sc_order_dt,
+sc_ship_dt,
+coalesce(wdd_depart_wh_dt, sc_ship_dt) as ship_dt,
+sc_ship_commit_dt,
+sc_preorder_backorder,
+sc_order_type,
+sc_segment,
+sc_ship_dt - sc_order_dt as sc_day_btwn_order_and_ship,
+sc_ship_commit_dt - sc_ship_dt as sc_day_btwn_ship_v_commit,
+sc_open_pobo_ind,
+sc_void_flag,
+sc_confirmation_id, 
+po_preorder_confirm_id,
+eph_confirmation_id, 
+eph_preorder_create_dt,
+eph_trans_dt,
+eph_preorder_complete_dt,
+eph_est_ship_dt, 
+eph_est_act_dt,
+eph_order_status,
+eph_equip_status_cd,
+sum(esf_net_sales) as esf_net_sales,
+sum(esf_return_qty) as esf_return_qty,
+sum(esf_sales_qty) as esf_sales_qty,
+sum(ispu_item_qty) as ispu_item_qty,
+sum(ln_expected_ga) as ln_expected_ga,
+sum(dsf_gross_adds) as dsf_gross_adds,
+count(distinct coalesce(pit_store_num, dea_store_num, eo_store_num) || coalesce(pit_invc_num, dea_invc_num, eo_invc_num) || coalesce(pit_invc_line_num, dea_cust_line_seq_id, eo_cust_line_seq_id)) as orders,
+DATE as insert_dt,
+identity_key
+from coe_prd_allvm.order_to_activation_v pos 
+
+left outer join 
+(select
+cal.sor_id,
+cal.cust_id,
+cal.acct_num,
+cal.cust_line_seq_id,
+cal.mtn,
+cal.mtn_status_ind,
+cal.esn_change_reas_cd,
+cal.esn_change_dt,
+count(cal.cust_id || cal.acct_num) as accts
+from ntl_prd_allvm.cust_acct_line_v cal
+where cal.mtn_status_ind in ('A', 'S')
+and cal.sor_id = 'V'
+group by 1,2,3,4,5,6,7,8
+) cal
+
+on coalesce(pos.po_cust_id, pos.dea_cust_id, pos.eo_cust_id) = cal.cust_id
+
+left outer join 
+(select
+cal2.sor_id,
+cal2.cust_id,
+cal2.acct_num,
+cal2.eqp_device_id,
+cal2.mtn_status_ind,
+count(cal2.cust_id || cal2.acct_num) as accts
+from ntl_prd_allvm.cust_acct_line_v cal2
+where cal2.mtn_status_ind in ('A', 'S')
+and cal2.sor_id = 'V'
+group by 1,2,3,4,5
+) cal2
+
+on Substring(coalesce(pit_esn_cap_cd, dea_eqp_device_id, eo_eqp_device_id) from 1 for 14) = Substring(cal2.eqp_device_id from 1 for 14)
+
+
+left outer join 
+(select
+cal3.sor_id,
+cal3.cust_id,
+cal3.acct_num,
+cal3.eqp_device_id,
+cal3.mtn_status_ind,
+count(cal3.cust_id || cal3.acct_num) as accts
+from ntl_prd_allvm.cust_acct_line_v cal3
+where cal3.mtn_status_ind in ('A', 'S')
+and cal3.sor_id = 'V'
+group by 1,2,3,4,5
+) cal3
+
+on Substring(coalesce(pit_esn_cap_cd, dea_eqp_device_id, eo_eqp_device_id) from 1 for 14) = Substring(cal3.eqp_device_id from 1 for 14)
+
+left outer join (
+select
+ads.cust_id,
+ads.acct_num,
+ads.rpt_mth,
+ads.vz2_segmt_cd,
+sdr.vz2_segmt_desc,
+sdr.vz2_segmt_ctgry_desc,
+count(*) as tot
+from
+acct_device_sum_fact_v ads 
+
+left outer join ntl_prd_allvm.vz2_segmt_dim_ref_v sdr         
+on ads.vz2_segmt_cd = sdr.vz2_segmt_cd
+and sdr.curr_prev_ind = 'C'
+
+where ads.acct_num is not null
+
+group by 1,2,3,4,5,6
+
+) ads
+
+on pos.po_cust_id = ads.cust_id
+
+left outer join ntl_prd_allvm.price_plan_v pp
+on pos.dsf_pplan_mkt_cd = pp.pplan_mkt_cd
+and pos.dsf_pplan_cd = pp.pplan_cd
+
+left outer join udm_prd_tbls.outlet o
+on coalesce(pit_sls_outlet_id, dea_sls_outlet_id, eo_sls_outlet_id) = o.sls_outlet_id
+and o.sor_id = 'V'
+
+left outer join ntl_prd_allvm.master_agents_xref_v ma
+on o.master_agent_id = ma.master_agent_id
+
+left join ntl_prdusr_tbls.cust_bgid_hist bg 
+on coalesce(po_cust_id, dea_cust_id, eo_cust_id) = bg.cust_id
+and coalesce(po_acct_num, dea_acct_num, eo_acct_num) = bg.acct_num
+and coalesce(cast(pit_src_create_ts as DATE), dea_order_open_dt, eo_order_create_dt) between bg.eff_dt and bg.exp_dt   
+    
+left join ntl_prdusr_tbls.bgid_mapping_xref cust_bgm
+on bg.bgid = cust_bgm.bgid
+
+left join ntl_prdusr_tbls.hqa_consumer_outlet_hist coh
+on cast ((((order_dt / 100) * 100) + 1) as date) = coh.rpt_mth
+and coalesce(pit_sls_outlet_id, dea_sls_outlet_id, eo_sls_outlet_id) = coh.sls_outlet_id
+and coh.executive_door_cnt_ind = 'Y'
+ 
+left join ntl_prdusr_tbls.bgid_mapping_xref otl_bgm
+on coh.bgid = otl_bgm.bgid
+
+where 
+Coalesce(po_dip_ind,'x')<>'t'  
+group by 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,
+51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,138,139
+
+
+
+create view coe_prd_allvm.order_to_activation_v from
+pit_region_cd	VARCHAR(2)		
+pit_store_num	VARCHAR(7)		
+pit_invc_num	VARCHAR(15)		
+pit_invc_line_num	DECIMAL(5, 0)		
+pit_mtn	VARCHAR(10)		
+pit_esn_cap_cd	VARCHAR(16)		
+pit_qty	DECIMAL(10, 2)		
+pit_item_price_amt	DECIMAL(10, 2)		
+pit_disc_percentage	DECIMAL(5, 0)		
+pit_disc_amt	DECIMAL(10, 2)
+
+------------------------------
+
+create view ntl_prd_allvm.cust_acct_line_v
+
+sor_id	CHAR(1)		false
+cust_id	VARCHAR(20)		false
+cust_line_seq_id	VARCHAR(20)		false
+acct_num	VARCHAR(20)		false
+mtn	CHAR(10)		false
+ln_id	VARCHAR(60)		false
+ln_id_type	VARCHAR(3)		false
+ln_of_svc_id_no_p1	VARCHAR(10)		false
+ln_of_svc_id_no_p2	VARCHAR(20)		false
+sls_outlet_id	VARCHAR(16)
+
+
+---------------------------
+
+create view ntl_prd_allvm.vz2_segmt_dim_ref_v
+vz2_segmt_cd	VARCHAR(30)		false
+vz2_segmt_rpt_key	VARCHAR(30)		false
+vz2_segmt_desc	VARCHAR(150)		false
+vz2_segmt_sub_type_rpt_key	VARCHAR(30)		false
+vz2_segmt_sub_type_desc	VARCHAR(150)		false
+vz2_segmt_type_rpt_key	VARCHAR(30)		false
+vz2_segmt_type_desc	VARCHAR(150)		false
+vz2_segmt_ctgry_rpt_key	VARCHAR(30)		false
+vz2_segmt_ctgry_desc	VARCHAR(150)		false
+vz2_segmt_class_rpt_key	VARCHAR(30)
+
+
+-------------------------
+create view acct_device_sum_fact_v
+
+rpt_mth	DATE		false
+sor_id	CHAR(1)		false
+cust_id	VARCHAR(15)		false
+acct_num	VARCHAR(20)		false
+prepaid_ind	CHAR(1)		false
+vsn_cust_type_cd	VARCHAR(2)		false
+vz2_segmt_cd	VARCHAR(50)		false
+state_cd	CHAR(2)		false
+total_acct_lines	INTEGER		false
+voice_lines	INTEGER
+----------------
+
+create view ntl_prd_allvm.price_plan_v
+
+sor_id	CHAR(1)		false
+pplan_cd	VARCHAR(20)		false
+pplan_mkt_cd	VARCHAR(10)		false
+pplan_type_cd	CHAR(5)		false
+pplan_desc	VARCHAR(75)		false
+access_amt	DECIMAL(10, 2)		false
+anlg_dgtl_ind	CHAR(1)		false
+pk_allow_min	INTEGER		false
+off_pk_allow_min	INTEGER		false
+tot_allow_min	INTEGER
+
+
+-----------------------
+create table udm_prd_tbls.outlet
+
+outlet_tz	VARCHAR(10)		true
+bi_sls_outlet_nm_abbrv	VARCHAR(50)		true
+bi_sls_outlet_rpt_key	VARCHAR(30)		true
+bi_outlet_type_desc	VARCHAR(150)		true
+bi_sls_outlet_nm	VARCHAR(150)		true
+edge_outlet_ind	CHAR(1)		true
+sls_outlet_sprss_ind	CHAR(1)		true
+sls_outlet_nm	VARCHAR(50)		true
+sls_outlet_mkt_cd	CHAR(4)		true
+sls_outlet_id	VARCHAR(10)	
+------------------------------------------
+create view ntl_prd_allvm.master_agents_xref_v
+
+master_agent_id	CHAR(15)		false
+master_agent_desc	CHAR(50)		false
+master_agent_area_cd	CHAR(2)		false
+master_agent_cost_center	VARCHAR(10)		false
+contract_type_desc	VARCHAR(75)		false
+erp_dist_chnl_cd	VARCHAR(10)		false
+
+
+-----------------------------------------------------
+
+create table ntl_prdusr_tbls.cust_bgid_hist
+
+cust_id	VARCHAR(15)		true
+acct_num	VARCHAR(20)		true
+eff_dt	DATE		true
+exp_dt	DATE		true
+bgid	VARCHAR(12)		true
+geo_bgid_2010	VARCHAR(12)		true
+insert_dt	DATE		true
+last_upd_dt	DATE		true
+----------------------------
+
+create table ntl_prdusr_tbls.bgid_mapping_xref 
+bgid	VARCHAR(12)		false
+latitude	DECIMAL(18, 6)		true
+longitude	DECIMAL(18, 6)		true
+sq_miles	DECIMAL(18, 6)		true
+cma_cd	VARCHAR(5)		true
+dma_cd	VARCHAR(5)		true
+fips_cd	VARCHAR(10)		true
+county_name	VARCHAR(30)		true
+state_cd	VARCHAR(5)		true
+state_name	VARCHAR(20)		true
+
+-----------------------------------------------
+create table ntl_prdusr_tbls.hqa_consumer_outlet_hist
+
+rpt_mth	DATE		true
+rpt_eom	DATE		true
+sls_outlet_id	VARCHAR(10)		true
+sls_outlet_nm	VARCHAR(30)		true
+loc_store_nm	VARCHAR(50)		true
+sls_dist_chnl_type_cd	CHAR(3)		true
+channel	CHAR(20)		true
+channel_grp	CHAR(20)		true
+sls_outlet_mkt_cd	CHAR(4)		true
+loc_store_num	VARCHAR(7)		true
+
+
+
+
