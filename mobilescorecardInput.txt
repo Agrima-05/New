@@ -1,0 +1,362 @@
+
+.SET ECHOREQ ERRORONLY
+
+.RUN FILE C:\runfile\restricted;
+
+.IF ERRORCODE <> 0 THEN .GOTO ERR
+;
+
+
+/*
+to dos
+-- count verfication from NTL_PRD_ALLVM.TABLE_LOAD_STATUS_V
+*/
+
+---------------------------------------------------------
+
+--step 1
+---------------------------------------------------------
+/*
+SELECT COUNT(DISTINCT(TABLENAME)) AS CNTT FROM NTL_PRD_ALLVM.TABLE_LOAD_STATUS_V WHERE TABLENAME ='EQUIP_SUM_FACT' AND LOAD_COMPLETION_DT=DATE
+;
+.IF ERRORCODE<>0 THEN .GOTO ERR
+;
+*/
+
+---------------------------------------------------------
+--Step 2 RC MOBILE SCORECARD VOLUME
+---------------------------------------------------------
+--CALL NTL_PRD_QMVM."sp_rc_mobile_scorecard"(date-extract(day from date)+1, add_months(date-extract(day from date)+1,1))
+--;
+
+ MERGE INTO
+                      ntl_prd_qmtbls.rc_mobile_scorecard BASE
+USING(SELECT
+       activity_dt           AS activity_dt
+       , activity_mth        AS activity_mth
+       , metric              AS metric
+       , device              AS device
+       , device_type         AS device_type
+       , actual_metric_cnt   AS actual_cnt
+       , cv_metric_cnt       AS cv_cnt
+       , forecast_metric_cnt AS forecast_cnt
+       , trend_metric_cnt    AS trend_cnt
+       , data_thru_dt
+       , case when activity_dt between td_month_begin(data_thru_dt) and last_day(data_thru_dt) then 1 else 0 end as mtd_flag_ind
+FROM
+       (
+            SELECT
+                     a.*
+                     , MAX(
+                          CASE
+                               WHEN metric_type='Actual' THEN a.activity_dt
+                          END)OVER() AS data_thru_dt
+            FROM
+                     NTL_PRD_QMVM."rc_dailyrun_upg_v" a
+            WHERE
+                     device         ='Phone'
+                     AND a.ACTIVITY_DT>= date-extract(day from date)+1
+                     AND a.ACTIVITY_DT<= add_months(date-extract(day from date)+1,1)
+            GROUP BY 1,2,3,4,5,6,7
+       )
+       y PIVOT( SUM(metric_cnt) AS metric_cnt FOR metric_type IN (
+                                                                   'Actual' AS actual
+                                                                   ,'CV' AS "cv"
+                                                                   ,'Forecast' AS forecast
+                                                                    ,'Trend' AS trend
+                                                                 )
+               )x
+
+ UNION ALL
+
+/* -------------------------------------------------------------------------- */
+/*                           //SECTION - Disconnects                          */
+/* -------------------------------------------------------------------------- */
+
+SELECT
+       activity_dt           AS activity_dt
+       , activity_mth        AS activity_mth
+       , metric              AS metric
+       , device              AS device
+       , device_type         AS device_type
+       , actual_metric_cnt   AS actual_cnt
+       , cv_metric_cnt       AS cv_cnt
+       , forecast_metric_cnt AS forecast_cnt
+       , trend_metric_cnt    AS trend_cnt
+       , data_thru_dt
+       , case when activity_dt between td_month_begin(data_thru_dt) and last_day(data_thru_dt) then 1 else 0 end as mtd_flag_ind
+FROM
+       (
+            SELECT DISTINCT
+                     activity_dt
+                     , activity_mth
+                     , metric
+                     , 'Phone' AS device
+                     , device_type
+                     , metric_type
+                     , metric_cnt
+                     , MAX(data_thru_dt)OVER() AS data_thru_dt
+              FROM
+                     NTL_PRD_QMVM."rc_dailyrun_disco_v"
+              WHERE  ACTIVITY_DT>= date-extract(day from date)+1
+              AND    ACTIVITY_DT<= add_months(date-extract(day from date)+1,1)
+       )
+       y PIVOT( SUM(metric_cnt) AS metric_cnt FOR metric_type IN (
+                                                                   'Actual' AS actual
+                                                                   ,'CV' AS "cv"
+                                                                   ,'Forecast' AS forecast
+                                                                    ,'Trend' AS trend
+                                                                 )
+               )x
+
+
+UNION ALL
+/* -------------------------------------------------------------------------- */
+/*                           //SECTION - AAL                                  */
+/* -------------------------------------------------------------------------- */
+
+SELECT
+       activity_dt           AS activity_dt
+       , activity_mth        AS activity_mth
+       , metric              AS metric
+       , device              AS device
+       , device_type         AS device_type
+       , actual_metric_cnt   AS actual_cnt
+       , cv_metric_cnt       AS cv_cnt
+       , forecast_metric_cnt AS forecast_cnt
+       , trend_metric_cnt    AS trend_cnt
+       , data_thru_dt
+       , case when activity_dt between td_month_begin(data_thru_dt) and last_day(data_thru_dt) then 1 else 0 end as mtd_flag_ind
+FROM
+       (
+            SELECT DISTINCT
+                     activity_dt
+                     , activity_mth
+                     , metric
+                     , 'Phone' AS device
+                     , device_type
+                     , metric_type
+                     , metric_cnt
+                     , MAX(CASE WHEN METRIC_TYPE='Actual' THEN activity_dt END )OVER() AS data_thru_dt
+              FROM
+                     NTL_PRD_QMVM."rc_dailyrun_aal_v"
+               WHERE  ACTIVITY_DT>= date-extract(day from date)+1
+               AND    ACTIVITY_DT<= add_months(date-extract(day from date)+1,1)
+               AND    DEVICE_TYPE='Phone'
+       )
+       y PIVOT( SUM(metric_cnt) AS metric_cnt FOR metric_type IN (
+                                                                   'Actual' AS actual
+                                                                   ,'CV' AS "cv"
+                                                                   ,'Forecast' AS forecast
+                                                                    ,'Trend' AS trend
+                                                                 )
+               )x
+
+UNION ALL
+/* -------------------------------------------------------------------------- */
+/*                       //SECTION - Add logic for Net adds                      */
+/* -------------------------------------------------------------------------- */
+SELECT
+       activity_dt           AS activity_dt
+       , activity_mth        AS activity_mth
+       , metric              AS metric
+       , device              AS device
+       , device_type         AS device_type
+       , actual_metric_cnt   AS actual_cnt
+       , cv_metric_cnt       AS cv_cnt
+       , forecast_metric_cnt AS forecast_cnt
+       , trend_metric_cnt    AS trend_cnt
+       , data_thru_dt
+       , case when activity_dt between td_month_begin(data_thru_dt) and last_day(data_thru_dt) then 1 else 0 end as mtd_flag_ind
+FROM
+       (SELECT
+           A.activity_dt
+           , A.activity_mth
+           , 'Net Adds' as metric
+           , 'Phone' AS device
+           , A.device_type
+           , A.metric_type
+           , (A.metric_cnt-B.METRIC_CNT) AS metric_cnt
+           , MAX(
+                CASE
+                     WHEN A.METRIC_TYPE='Actual' THEN A.activity_dt
+                END )OVER() AS data_thru_dt
+FROM
+           NTL_PRD_QMVM."rc_dailyrun_aal_v" A
+     INNER JOIN
+          (
+               SELECT DISTINCT
+                      activity_dt
+                      , activity_mth
+                      , 'Net Adds' AS metric
+                      , 'Phone' AS device
+                      , device_type
+                      , metric_type
+                      , metric_cnt
+                      , MAX(data_thru_dt)OVER() AS data_thru_dt
+               FROM
+                      NTL_PRD_QMVM."rc_dailyrun_disco_v"
+               WHERE
+                      ACTIVITY_DT>= date-extract(day from date)+1
+					  AND    ACTIVITY_DT<= add_months(date-extract(day from date)+1,1)
+                      AND METRIC ='Total Disco'
+          )
+          B
+          ON
+               A.ACTIVITY_DT    =B.ACTIVITY_DT
+               AND A.METRIC_TYPE=B.METRIC_TYPE
+WHERE
+           A.ACTIVITY_DT    >= date-extract(day from date)+1
+           AND a.ACTIVITY_DT<= add_months(date-extract(day from date)+1,1)
+           AND A.DEVICE_TYPE='Phone'
+           AND A.METRIC     ='Gross Adds'
+)
+       y PIVOT( SUM(metric_cnt) AS metric_cnt FOR metric_type IN (
+                                                                   'Actual' AS actual
+                                                                   ,'CV' AS "cv"
+                                                                   ,'Forecast' AS forecast
+                                                                    ,'Trend' AS trend
+                                                                 )
+               )x
+
+UNION ALL
+/* -------------------------------------------------------------------------- */
+/*                           //SECTION - Steps                                  */
+/* -------------------------------------------------------------------------- */
+
+SELECT
+       activity_dt           AS activity_dt
+       , activity_mth        AS activity_mth
+       , metric              AS metric
+       , device              AS device
+       , device_type         AS device_type
+       , actual_metric_cnt   AS actual_cnt
+       , cv_metric_cnt       AS cv_cnt
+       , forecast_metric_cnt AS forecast_cnt
+       , trend_metric_cnt    AS trend_cnt
+       , data_thru_dt
+       , case when activity_dt between td_month_begin(data_thru_dt) and last_day(data_thru_dt) then 1 else 0 end as mtd_flag_ind
+FROM
+       (
+            SELECT DISTINCT
+                     activity_dt
+                     , activity_mth
+                     , metric
+                     , 'Phone' AS device
+                     , 'all' as device_type
+                     , metric_type
+                     , sum(CASE WHEN METRIC='STEP REVENUE' THEN metric_cnt/2 ELSE METRIC_CNT END) over (partition by activity_dt,metric,metric_type) AS METRIC_CNT
+                     , MAX(CASE WHEN METRIC_TYPE='Actual' THEN activity_dt END )OVER() AS data_thru_dt
+              FROM
+                     NTL_PRD_QMVM."rc_dailyrun_step_v"
+              WHERE ACTIVITY_DT>= date-extract(day from date)+1
+              AND ACTIVITY_DT<= add_months(date-extract(day from date)+1,1)
+       )
+       y PIVOT( SUM(metric_cnt) AS metric_cnt FOR metric_type IN (
+                                                                   'Actual' AS actual
+                                                                   ,'Cv' AS "cv"
+                                                                   ,'Ol' AS forecast
+                                                                    ,'Trend' AS trend
+                                                                 )
+               )x)Z
+               on
+                      BASE.activity_dt    =Z.activity_dt
+                      AND BASE.METRIC     =Z.METRIC
+                      AND BASE.DEVICE     =Z.DEVICE
+                      AND BASE.DEVICE_TYPE=Z.DEVICE_TYPE
+WHEN MATCHED THEN
+     UPDATE
+
+     SET
+            actual_cnt    =Z.actual_cnt
+            , cv_cnt      =Z.cv_cnt
+            , forecast_cnt=Z.forecast_cnt
+            , trend_cnt   =Z.trend_cnt
+            , data_thru_dt=Z.data_thru_dt
+            , mtd_flag_ind=Z.mtd_flag_ind
+WHEN NOT MATCHED THEN
+     INSERT
+            (
+                 activity_dt
+                 , activity_mth
+                 , metric
+                 , device
+                 , device_type
+                 , actual_cnt
+                 , cv_cnt
+                 , forecast_cnt
+                 , trend_cnt
+                 , data_thru_dt
+                 , mtd_flag_ind
+            )
+     VALUES
+            (
+                 Z.activity_dt
+                 , Z.activity_mth
+                 , Z.metric
+                 , Z.device
+                 , Z.device_type
+                 , Z.actual_cnt
+                 , Z.cv_cnt
+                 , Z.forecast_cnt
+                 , Z.trend_cnt
+                 , Z.data_thru_dt
+                 , Z.mtd_flag_ind
+            );
+ COLLECT STATISTICS ON ntl_prd_qmtbls.rc_mobile_scorecard
+          ;
+.IF ERRORCODE<>0 THEN .GOTO ERR
+;
+
+---------------------------------------------------------
+---------step 3 check status of OS load File----------------------
+---------------------------------------------------------
+/*
+{FILE(ModifiedTime|\\sacwpia6vw001\os\crm_forecast.csv|yyyyMMdd.HHmmss)}  
+
+*/
+
+
+---------------------------------------------------------
+---------step 4 sql load status mobile scorecard----------------------
+---------------------------------------------------------
+
+-- call ntl_prd_qmvm.sprc_kpiloadstatus
+-- (
+-- --'{REGEX(Replace|{STRING(GetColumn|2|7|,|{TASK(5415d617-71af-4805-98a9-9f024b991824|StdOut)})}|"|)}'
+-- 'Mobile Base Scorecard'
+-- , CURRENT_TIMESTAMP
+-- , '{LOGIC(If|Integer|{REGEX(Replace|{STRING(GetColumn|2|3|,|{TASK(5415d617-71af-4805-98a9-9f024b991824|StdOut)})}|"|)}|==|100|Success|Failed)}'
+-- , '{REGEX(MatchGetGroup|{REGEX(Replace|{STRING(GetColumn|2|10|,|{TASK(5415d617-71af-4805-98a9-9f024b991824|StdOut)})}|"|)}|(.*) (.*)[(]|1)}'
+-- , NULL
+-- , DATE
+-- );
+
+
+-------------------------------------------------------------------
+-------------- ERROR SECTION -- COMPLETE/FAIL ALERTS --------------
+-------------------------------------------------------------------
+
+--.OS "E:\Automation\Alerts\MobileScorecard_Success.py"
+
+.os powershell.exe "Send-MailMessage -From $env:computername@verizonwireless.com -To dmbmautomationsupport@verizonwireless.com -SmtpServer 'vzsmtp.verizon.com' -Subject 'Forecast MobileScorecard Refresh Succesful' -Body 'JobFolder: Forecast, JobName:Mobile Scorecard, JobStatus:SUCCESS'";
+
+.LOGOFF
+.QUIT
+
+
+-------------------------------------------------------------------
+-------------- ERROR SECTION -- COMPLETE/FAIL ALERTS --------------
+-------------------------------------------------------------------
+
+.LABEL ERR
+
+/*----------  Send Error Alert Email  ----------*/
+--.OS "E:\Automation\Alerts\MobileScorecard_Fail.py"
+
+.os powershell.exe "Send-MailMessage -From $env:computername@verizonwireless.com -To dmbmautomationsupport@verizonwireless.com -SmtpServer 'vzsmtp.verizon.com' -Subject 'Forecast MobileScorecard  Refresh Failed' -Body 'JobFolder: Forecast, JobName:Mobile Scorecard, JobStatus:Failed' -Priority High";
+
+
+
+.LOGOFF
+.QUIT
