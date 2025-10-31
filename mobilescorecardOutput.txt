@@ -1,0 +1,152 @@
+--PSOCOMMENT-- --.SET ECHOREQ ERRORONLY
+BEGIN
+DECLARE _ERROR_CODE INT64;
+DECLARE _ERROR_MESSAGE STRING DEFAULT '';
+DECLARE _GLOBAL_ERROR_CODE INT64 DEFAULT 0;
+--.RUN FILE C:\runfile\restricted;
+--.IF ERRORCODE <> 0 THEN .GOTO ERR
+--PSOCOMMENT-- ;
+/*
+
+to dos
+
+-- count verfication from {{params.gk1v_do}}.NTL_PRD_ALLVM.TABLE_LOAD_STATUS_V
+
+*/
+---------------------------------------------------------
+--step 1
+---------------------------------------------------------
+/*
+
+SELECT COUNT(DISTINCT(TABLENAME)) AS CNTT from {{params.gk1v_do}}.NTL_PRD_ALLVM.TABLE_LOAD_STATUS_V WHERE TABLENAME ='EQUIP_SUM_FACT' AND LOAD_COMPLETION_DT=DATE
+
+;
+
+.IF ERRORCODE<>0 THEN .GOTO ERR
+
+;
+
+*/
+---------------------------------------------------------
+--Step 2 RC MOBILE SCORECARD VOLUME
+---------------------------------------------------------
+--CALL NTL_PRD_QMVM."sp_rc_mobile_scorecard"(date-extract(day from date)+1, add_months(date-extract(day from date)+1,1))
+--;
+/* -------------------------------------------------------------------------- */
+/*                           //SECTION - Disconnects                          */
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                           //SECTION - AAL                                  */
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                       //SECTION - Add logic for Net adds                      */
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                           //SECTION - Steps                                  */
+/* -------------------------------------------------------------------------- */
+BEGIN
+SET _ERROR_CODE  =  0;
+MERGE INTO {{params.k45v_enabdo}}.ntl_prd_qmtbls.rc_mobile_scorecard AS base
+USING (SELECT activity_dt, activity_mth, metric, device, device_type, actual_metric_cnt AS actual_cnt, cv_metric_cnt AS cv_cnt, forecast_metric_cnt AS forecast_cnt, trend_metric_cnt AS trend_cnt, data_thru_dt, CASE WHEN activity_dt BETWEEN DATE_TRUNC(data_thru_dt, MONTH) AND (LAST_DAY(data_thru_dt)) THEN 1 ELSE 0 END AS mtd_flag_ind
+        FROM (SELECT activity_dt, activity_mth, metric, device, device_type, metric_type, metric_cnt, MAX(CASE WHEN UPPER(metric_type) = UPPER('Actual') THEN activity_dt ELSE NULL END) OVER (RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS data_thru_dt
+                FROM {{params.k45v_enabdo}}.ntl_prd_qmvm.rc_dailyrun_upg_v AS a
+                WHERE UPPER(device) = UPPER('Phone') AND activity_dt >= DATE_ADD(DATE_SUB(CURRENT_DATE("America/New_York"), INTERVAL EXTRACT(DAY FROM CURRENT_DATE("America/New_York")) DAY), INTERVAL 1 DAY) AND activity_dt <= DATE_ADD(DATE_ADD(DATE_SUB(CURRENT_DATE("America/New_York"), INTERVAL EXTRACT(DAY FROM CURRENT_DATE("America/New_York")) DAY), INTERVAL 1 DAY), INTERVAL 1 MONTH)
+                GROUP BY activity_dt, activity_mth, metric, device, device_type, metric_type, metric_cnt) PIVOT (SUM(metric_cnt) FOR LOWER(metric_type) IN (LOWER('Actual') AS actual_metric_cnt, LOWER('CV') AS cv_metric_cnt, LOWER('Forecast') AS forecast_metric_cnt, LOWER('Trend') AS trend_metric_cnt)) AS x
+        UNION ALL
+        SELECT activity_dt, activity_mth, metric, device, device_type, actual_metric_cnt AS actual_cnt, cv_metric_cnt AS cv_cnt, forecast_metric_cnt AS forecast_cnt, trend_metric_cnt AS trend_cnt, data_thru_dt, CASE WHEN activity_dt BETWEEN DATE_TRUNC(data_thru_dt, MONTH) AND (LAST_DAY(data_thru_dt)) THEN 1 ELSE 0 END AS mtd_flag_ind
+        FROM (SELECT activity_dt, activity_mth, metric, device, device_type, metric_type, metric_cnt, data_thru_dt
+                FROM (SELECT DISTINCT activity_dt, activity_mth, metric, 'Phone' AS device, device_type, UPPER(metric_type) AS metric_type, metric_cnt, MAX(data_thru_dt) OVER (RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS data_thru_dt
+                        FROM {{params.k45v_enabdo}}.ntl_prd_qmvm.rc_dailyrun_disco_v
+                        WHERE activity_dt >= DATE_ADD(DATE_SUB(CURRENT_DATE("America/New_York"), INTERVAL EXTRACT(DAY FROM CURRENT_DATE("America/New_York")) DAY), INTERVAL 1 DAY) AND activity_dt <= DATE_ADD(DATE_ADD(DATE_SUB(CURRENT_DATE("America/New_York"), INTERVAL EXTRACT(DAY FROM CURRENT_DATE("America/New_York")) DAY), INTERVAL 1 DAY), INTERVAL 1 MONTH)) AS y) PIVOT (SUM(metric_cnt) FOR LOWER(metric_type) IN (LOWER('Actual') AS actual_metric_cnt, LOWER('CV') AS cv_metric_cnt, LOWER('Forecast') AS forecast_metric_cnt, LOWER('Trend') AS trend_metric_cnt)) AS x
+        UNION ALL
+        SELECT activity_dt, activity_mth, metric, device, device_type, actual_metric_cnt AS actual_cnt, cv_metric_cnt AS cv_cnt, forecast_metric_cnt AS forecast_cnt, trend_metric_cnt AS trend_cnt, data_thru_dt, CASE WHEN activity_dt BETWEEN DATE_TRUNC(data_thru_dt, MONTH) AND (LAST_DAY(data_thru_dt)) THEN 1 ELSE 0 END AS mtd_flag_ind
+        FROM (SELECT activity_dt, activity_mth, metric, device, device_type, metric_type, metric_cnt, data_thru_dt
+                FROM (SELECT DISTINCT activity_dt, activity_mth, UPPER(metric) AS metric, 'Phone' AS device, UPPER(device_type) AS device_type, UPPER(metric_type) AS metric_type, metric_cnt, MAX(CASE WHEN UPPER(metric_type) = UPPER('Actual') THEN activity_dt ELSE NULL END) OVER (RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS data_thru_dt
+                        FROM {{params.k45v_enabdo}}.ntl_prd_qmvm.rc_dailyrun_aal_v
+                        WHERE activity_dt >= DATE_ADD(DATE_SUB(CURRENT_DATE("America/New_York"), INTERVAL EXTRACT(DAY FROM CURRENT_DATE("America/New_York")) DAY), INTERVAL 1 DAY) AND activity_dt <= DATE_ADD(DATE_ADD(DATE_SUB(CURRENT_DATE("America/New_York"), INTERVAL EXTRACT(DAY FROM CURRENT_DATE("America/New_York")) DAY), INTERVAL 1 DAY), INTERVAL 1 MONTH) AND UPPER(device_type) = UPPER('Phone')) AS y) PIVOT (SUM(metric_cnt) FOR LOWER(metric_type) IN (LOWER('Actual') AS actual_metric_cnt, LOWER('CV') AS cv_metric_cnt, LOWER('Forecast') AS forecast_metric_cnt, LOWER('Trend') AS trend_metric_cnt)) AS x
+        UNION ALL
+        SELECT activity_dt, activity_mth, metric, device, device_type, actual_metric_cnt AS actual_cnt, cv_metric_cnt AS cv_cnt, forecast_metric_cnt AS forecast_cnt, trend_metric_cnt AS trend_cnt, data_thru_dt, CASE WHEN activity_dt BETWEEN DATE_TRUNC(data_thru_dt, MONTH) AND (LAST_DAY(data_thru_dt)) THEN 1 ELSE 0 END AS mtd_flag_ind
+        FROM (SELECT a.activity_dt, a.activity_mth, 'Net Adds' AS metric, 'Phone' AS device, a.device_type, a.metric_type, a.metric_cnt - B.metric_cnt AS metric_cnt, MAX(CASE WHEN UPPER(a.metric_type) = UPPER('Actual') THEN a.activity_dt ELSE NULL END) OVER (RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS data_thru_dt
+                FROM {{params.k45v_enabdo}}.ntl_prd_qmvm.rc_dailyrun_aal_v AS a
+                    INNER JOIN (SELECT DISTINCT activity_dt, activity_mth, 'Net Adds' AS metric, 'Phone' AS device, device_type, UPPER(metric_type) AS metric_type, metric_cnt, MAX(data_thru_dt) OVER (RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS data_thru_dt
+                        FROM {{params.k45v_enabdo}}.ntl_prd_qmvm.rc_dailyrun_disco_v
+                        WHERE activity_dt >= DATE_ADD(DATE_SUB(CURRENT_DATE("America/New_York"), INTERVAL EXTRACT(DAY FROM CURRENT_DATE("America/New_York")) DAY), INTERVAL 1 DAY) AND activity_dt <= DATE_ADD(DATE_ADD(DATE_SUB(CURRENT_DATE("America/New_York"), INTERVAL EXTRACT(DAY FROM CURRENT_DATE("America/New_York")) DAY), INTERVAL 1 DAY), INTERVAL 1 MONTH) AND UPPER(metric) = UPPER('Total Disco')) AS B ON a.activity_dt = B.activity_dt AND UPPER(a.metric_type) = UPPER(B.metric_type)
+                WHERE a.activity_dt >= DATE_ADD(DATE_SUB(CURRENT_DATE("America/New_York"), INTERVAL EXTRACT(DAY FROM CURRENT_DATE("America/New_York")) DAY), INTERVAL 1 DAY) AND a.activity_dt <= DATE_ADD(DATE_ADD(DATE_SUB(CURRENT_DATE("America/New_York"), INTERVAL EXTRACT(DAY FROM CURRENT_DATE("America/New_York")) DAY), INTERVAL 1 DAY), INTERVAL 1 MONTH) AND UPPER(a.device_type) = UPPER('Phone') AND UPPER(a.metric) = UPPER('Gross Adds')) PIVOT (SUM(metric_cnt) FOR LOWER(metric_type) IN (LOWER('Actual') AS actual_metric_cnt, LOWER('CV') AS cv_metric_cnt, LOWER('Forecast') AS forecast_metric_cnt, LOWER('Trend') AS trend_metric_cnt)) AS x
+        UNION ALL
+        SELECT activity_dt, activity_mth, metric, device, device_type, actual_metric_cnt AS actual_cnt, cv_metric_cnt AS cv_cnt, forecast_metric_cnt AS forecast_cnt, trend_metric_cnt AS trend_cnt, data_thru_dt, CASE WHEN activity_dt BETWEEN DATE_TRUNC(data_thru_dt, MONTH) AND (LAST_DAY(data_thru_dt)) THEN 1 ELSE 0 END AS mtd_flag_ind
+        FROM (SELECT activity_dt, activity_mth, metric, device, device_type, metric_type, metric_cnt, data_thru_dt
+                FROM (SELECT DISTINCT activity_dt, activity_mth, UPPER(metric) AS metric, 'Phone' AS device, 'all' AS device_type, UPPER(metric_type) AS metric_type, SUM(CASE WHEN UPPER(metric) = UPPER('STEP REVENUE') THEN metric_cnt / 2 ELSE metric_cnt END) OVER (PARTITION BY activity_dt, UPPER(metric), UPPER(metric_type) RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS metric_cnt, MAX(CASE WHEN UPPER(metric_type) = UPPER('Actual') THEN activity_dt ELSE NULL END) OVER (RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS data_thru_dt
+                        FROM {{params.k45v_enabdo}}.ntl_prd_qmvm.rc_dailyrun_step_v
+                        WHERE activity_dt >= DATE_ADD(DATE_SUB(CURRENT_DATE("America/New_York"), INTERVAL EXTRACT(DAY FROM CURRENT_DATE("America/New_York")) DAY), INTERVAL 1 DAY) AND activity_dt <= DATE_ADD(DATE_ADD(DATE_SUB(CURRENT_DATE("America/New_York"), INTERVAL EXTRACT(DAY FROM CURRENT_DATE("America/New_York")) DAY), INTERVAL 1 DAY), INTERVAL 1 MONTH)) AS y) PIVOT (SUM(metric_cnt) FOR LOWER(metric_type) IN (LOWER('Actual') AS actual_metric_cnt, LOWER('Cv') AS cv_metric_cnt, LOWER('Ol') AS forecast_metric_cnt, LOWER('Trend') AS trend_metric_cnt)) AS x) AS Z
+ON base.activity_dt = Z.activity_dt AND UPPER(base.metric) = UPPER(Z.metric) AND UPPER(base.device) = UPPER(Z.device) AND UPPER(base.device_type) = UPPER(Z.device_type)
+WHEN MATCHED THEN UPDATE SET
+    actual_cnt = CAST(Z.actual_cnt AS INTEGER),
+    cv_cnt = CAST(Z.cv_cnt AS INTEGER),
+    forecast_cnt = CAST(Z.forecast_cnt AS INTEGER),
+    trend_cnt = CAST(Z.trend_cnt AS INTEGER),
+    data_thru_dt = Z.data_thru_dt,
+    mtd_flag_ind = CAST(Z.mtd_flag_ind AS BYTEINT)
+WHEN NOT MATCHED THEN INSERT VALUES(Z.activity_dt, Z.activity_mth, Z.metric, Z.device, Z.device_type, CAST(Z.actual_cnt AS INTEGER), CAST(Z.cv_cnt AS INTEGER), CAST(Z.forecast_cnt AS INTEGER), CAST(Z.trend_cnt AS INTEGER), Z.data_thru_dt, CAST(Z.mtd_flag_ind AS BYTEINT));
+EXCEPTION WHEN ERROR THEN
+SET _ERROR_CODE  =  1;
+SET _GLOBAL_ERROR_CODE  =  1;
+SET _ERROR_MESSAGE  =  CONCAT(_ERROR_MESSAGE,  ' errormsg = ', @@error.message, ' stacktrace = ', @@error.formatted_stack_trace);
+RAISE USING MESSAGE = CONCAT("Exception while running query : ",FORMAT(@@error.message),@@error.formatted_stack_trace);
+END;
+--COLLECT STATISTICS ON {{params.k45v_msgcdo}}.ntl_prd_qmtbls.rc_mobile_scorecard
+--;
+--.IF ERRORCODE<>0 THEN .GOTO ERR
+--PSOCOMMENT-- ;
+---------------------------------------------------------
+---------step 3 check status of OS load File----------------------
+---------------------------------------------------------
+/*
+
+{FILE(ModifiedTime|\\sacwpia6vw001\os\crm_forecast.csv|yyyyMMdd.HHmmss)}
+
+
+
+*/
+---------------------------------------------------------
+---------step 4 sql load status mobile scorecard----------------------
+---------------------------------------------------------
+-- call ntl_prd_qmvm.sprc_kpiloadstatus
+-- (
+-- --'{REGEX(Replace|{STRING(GetColumn|2|7|,|{TASK(5415d617-71af-4805-98a9-9f024b991824|StdOut)})}|"|)}'
+-- 'Mobile Base Scorecard'
+-- , CURRENT_TIMESTAMP
+-- , '{LOGIC(If|Integer|{REGEX(Replace|{STRING(GetColumn|2|3|,|{TASK(5415d617-71af-4805-98a9-9f024b991824|StdOut)})}|"|)}|==|100|Success|Failed)}'
+-- , '{REGEX(MatchGetGroup|{REGEX(Replace|{STRING(GetColumn|2|10|,|{TASK(5415d617-71af-4805-98a9-9f024b991824|StdOut)})}|"|)}|(.*) (.*)[(]|1)}'
+-- , NULL
+-- , DATE
+-- );
+-------------------------------------------------------------------
+-------------- ERROR SECTION -- COMPLETE/FAIL ALERTS --------------
+-------------------------------------------------------------------
+--.OS "E:\Automation\Alerts\MobileScorecard_Success.py"
+--PSOCOMMENT-- .os powershell.exe "Send-MailMessage -From $env:computername@verizonwireless.com -To dmbmautomationsupport@verizonwireless.com -SmtpServer 'vzsmtp.verizon.com' -Subject 'Forecast MobileScorecard Refresh Succesful' -Body 'JobFolder: Forecast, JobName:Mobile Scorecard, JobStatus:SUCCESS'";
+--PSOCOMMENT-- --.LOGOFF;
+
+IF _GLOBAL_ERROR_CODE <> 0 THEN
+    SELECT ERROR('RC (return code) = ' || FORMAT('%11d', _GLOBAL_ERROR_CODE) || _ERROR_MESSAGE) AS `A12180`;
+    RETURN;
+END IF;
+
+SELECT 'RC (return code) = ' || FORMAT('%11d', _GLOBAL_ERROR_CODE) AS `A12180`;
+RETURN;
+-------------------------------------------------------------------
+-------------- ERROR SECTION -- COMPLETE/FAIL ALERTS --------------
+-------------------------------------------------------------------
+/*----------  Send Error Alert Email  ----------*/
+--.OS "E:\Automation\Alerts\MobileScorecard_Fail.py"
+--PSOCOMMENT-- .os powershell.exe "Send-MailMessage -From $env:computername@verizonwireless.com -To dmbmautomationsupport@verizonwireless.com -SmtpServer 'vzsmtp.verizon.com' -Subject 'Forecast MobileScorecard  Refresh Failed' -Body 'JobFolder: Forecast, JobName:Mobile Scorecard, JobStatus:Failed' -Priority High";
+--PSOCOMMENT-- --.LOGOFF;
+
+IF _GLOBAL_ERROR_CODE > 0 THEN
+    SELECT ERROR('RC (return code) = ' || FORMAT('%11d', _GLOBAL_ERROR_CODE) || _ERROR_MESSAGE) AS `A12180`;
+    RETURN;
+END IF;
+
+SELECT 'RC (return code) = ' || FORMAT('%11d', _GLOBAL_ERROR_CODE) AS `A12180`;
+RETURN;
+END;
